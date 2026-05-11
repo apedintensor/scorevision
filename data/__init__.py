@@ -19,5 +19,11 @@ Adapters present so far:
 
 from .label_map import SOCCERNET_TO_SCORE
 from .synthetic import SyntheticFootballDataset
+from .score_samples import ScoreSamplesDataset, DEFAULT_SAMPLE_URLS
 
-__all__ = ["SyntheticFootballDataset", "SOCCERNET_TO_SCORE"]
+__all__ = [
+    "SyntheticFootballDataset",
+    "ScoreSamplesDataset",
+    "DEFAULT_SAMPLE_URLS",
+    "SOCCERNET_TO_SCORE",
+]

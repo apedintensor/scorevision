@@ -12,6 +12,17 @@ All checkpoints use `trust_remote_code=True` (custom_code on HF).
 
 K710 has 710 classes; use `class_map.k_label_relevance_mask` to project
 onto Score's 15 actions for zero-shot eval.
+
+⚠️  Known issue (2026-05): OpenGVLab's `modeling_videomaev2.py` was written
+for transformers 4.x and is **not source-compatible with transformers 5.x**.
+On 5.x you'll hit cascading errors:
+    1. `torch.linspace().item()` fails (meta-device init)  — workaround below
+    2. `'VideoMAEv2' has no attribute 'all_tied_weights_keys'` — workaround
+    3. `'NoneType' object has no attribute 'keys'` — not yet patched
+
+For Lium runs, pin `transformers==4.45` (or compatible 4.x). The shims
+below cover (1) and (2) so the code is ready for the moment 4.x is
+installed.
 """
 
 from __future__ import annotations
@@ -59,11 +70,47 @@ class VideoMAEv2Classifier:
         self.dtype = dtype
 
         self.processor = AutoImageProcessor.from_pretrained(hf_repo, trust_remote_code=True)
-        self.model = (
-            AutoModel.from_pretrained(hf_repo, trust_remote_code=True, torch_dtype=dtype)
-            .to(self.device)
-            .eval()
-        )
+        # OpenGVLab's custom modeling_videomaev2.py calls `torch.linspace(...).item()`
+        # during __init__. accelerate's init_empty_weights (entered transparently by
+        # transformers >= 5.x) sets the default torch device to "meta", which makes
+        # `.item()` on a fresh tensor raise. Two-pronged workaround:
+        #  1. `low_cpu_mem_usage=False` to ask transformers not to enter meta init,
+        #  2. monkey-patch `torch.linspace` to force a CPU device for the duration of
+        #     the load — guards against any other accelerate-style context an upgrade
+        #     might introduce.
+        _orig_linspace = torch.linspace
+
+        def _cpu_linspace(*args, **kwargs):
+            kwargs.setdefault("device", "cpu")
+            return _orig_linspace(*args, **kwargs)
+
+        torch.linspace = _cpu_linspace
+        try:
+            # Pull the custom model class via AutoConfig (downloads + registers the
+            # module), then monkey-patch the legacy `_tied_weights_keys` to the
+            # transformers >= 5.x name `all_tied_weights_keys` before loading.
+            from transformers import AutoConfig
+
+            cfg = AutoConfig.from_pretrained(hf_repo, trust_remote_code=True)
+            module_path = cfg.auto_map["AutoModel"]
+            module_name, class_name = module_path.rsplit(".", 1)
+            import importlib
+            mod = importlib.import_module(
+                f"transformers_modules.{hf_repo.replace('/', '.').replace('-', '_hyphen_')}."
+                + module_name.replace(".", "_")
+            ) if False else None  # noqa: SIM222 — handled by Auto* below
+            # Easier: let AutoModel resolve the class but inject the attr after.
+            target_cls = type(AutoModel.from_config(cfg, trust_remote_code=True))
+            if not hasattr(target_cls, "all_tied_weights_keys"):
+                target_cls.all_tied_weights_keys = getattr(target_cls, "_tied_weights_keys", [])
+            model = AutoModel.from_pretrained(
+                hf_repo,
+                trust_remote_code=True,
+                low_cpu_mem_usage=False,
+            )
+        finally:
+            torch.linspace = _orig_linspace
+        self.model = model.to(self.device, dtype=dtype).eval()
 
         # OpenGVLab heads expose id2label on config when finetuned for classification.
         cfg = getattr(self.model, "config", None)

@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Logs / runtime artifacts
+*.log
+benchmark/results/
+runs/
+wandb/
+
+# External read-only reference repo (clone via scripts/clone_turbovision.sh)
+turbovision/
+
+# Data snapshots / intel (per-project, not part of the framework)
+manifest-*.json
+discord-intel/
+data/cache/
+data/downloads/
+
+# Model weights / HF cache
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.onnx
+hf_cache/
+.cache/
+
+# Claude / agent-specific resources — not part of the framework
+CLAUDE.md
+.claude/
+memory/
+
+# Secrets / env
+.env
+.env.local
+*.secret
+secrets/

@@ -1,0 +1,17 @@
+# Core deps for local smoke test on a 4060.
+# Install with:    pip install -r requirements.txt
+# For Lium runs see ops/lium_quickstart.sh (adds flash-attn, deepspeed, etc).
+
+torch>=2.2
+torchvision>=0.17
+transformers>=4.45
+accelerate>=0.30
+huggingface-hub>=0.24
+av>=12.0                 # video decoding
+einops>=0.7
+numpy>=1.26
+scipy>=1.11
+pillow>=10.0
+pydantic>=2.5
+requests>=2.31
+tqdm>=4.66
